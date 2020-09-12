@@ -51,8 +51,8 @@ class Sessions extends Model {
    * an insert query or rejected with the error that occured.
    */
   create() {
-    let data = utils.createRandom32String();
-    let hash = utils.createHash(data);
+    let data = utils.createRandom32String();//create rand string
+    let hash = utils.createHash(data); //create a unique hash
     return super.create.call(this, { hash });
   }
 }
