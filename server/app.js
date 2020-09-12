@@ -76,6 +76,7 @@ app.post('/links',
 
 app.post('/signup',
   (req, res, next) => {
+    debugger;
     var username = req.body.username;
     var password = req.body.password;
     models.Users.get({username: username})
@@ -83,7 +84,10 @@ app.post('/signup',
         if (result) {
           res.redirect('/login');
         } else {
-          models.Users.create(username, password);
+          models.Users.create(username, password)
+            .then(result => {
+              if (result) {}
+            });
         }
       });
   });
