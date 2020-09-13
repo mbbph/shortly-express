@@ -15,19 +15,20 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, '../public')));
 
+app.use(require('./middleware/cookieParser'));
+app.use(Auth.createSession);
 
-
-app.get('/',
+app.get('/', Auth.verifySession,
   (req, res) => {
     res.render('index');
   });
 
-app.get('/create',
+app.get('/create', Auth.verifySession,
   (req, res) => {
     res.render('index');
   });
 
-app.get('/links',
+app.get('/links', Auth.verifySession,
   (req, res, next) => {
     models.Links.getAll()
       .then(links => {
@@ -38,7 +39,7 @@ app.get('/links',
       });
   });
 
-app.post('/links',
+app.post('/links', Auth.verifySession,
   (req, res, next) => {
     var url = req.body.url;
     if (!models.Links.isValidUrl(url)) {
@@ -73,41 +74,99 @@ app.post('/links',
         res.status(200).send(link);
       });
   });
-
 app.post('/signup',
   (req, res, next) => {
-    debugger;
     var username = req.body.username;
     var password = req.body.password;
-    models.Users.get({username: username})
-      .then(result => {
-        if (result) {
-          res.redirect('/login');
-        } else {
-          models.Users.create(username, password)
-            .then(result => {
-              if (result) {}
-            });
+    return models.Users.get({username})
+      .then(user => {
+        if (user) {
+          throw user;
         }
+        return models.Users.create({username, password});
+      })
+      .then(results => {
+        return models.Sessions.update({hash: req.session.hash}, {userId: results.insertId});
+      })
+      .then(() => {
+        res.redirect('/');
+      })
+      .error(error => {
+        res.status(500).send(error);
+      })
+      .catch(user => {
+        res.redirect('/signup');
       });
   });
+// app.post('/signup',
+//   (req, res, next) => {
+//     debugger;
+//     var username = req.body.username;
+//     var password = req.body.password;
+//     models.Users.get({username: username})
+//       .then(result => {
+//         if (result) {
+//           res.redirect('/login');
+//         } else {
+//           models.Users.create(username, password)
+//             .then(result => {
+//               if (result) {}
+//             });
+//         }
+//       });
+//   });
+
+// app.post('/login',
+//   (req, res, next) => {
+//     var username = req.body.username;
+//     var password = req.body.password;
+//     models.Users.get({username: username})
+//       .then(result => {
+//         if (!result) {
+//           res.redirect('/login');
+//         } else {
+//           if (models.Users.compare(password, result.password, result.salt)) { //successful login
+//             //change session params
+//             //redirect to home page
+//           } else {
+//             res.redirect('/login');
+//           }
+//         }
+//       });
+//   });
 
 app.post('/login',
   (req, res, next) => {
     var username = req.body.username;
     var password = req.body.password;
-    models.Users.get({username: username})
-      .then(result => {
-        if (!result) {
-          res.redirect('/login');
-        } else {
-          if (models.Users.compare(password, result.password, result.salt)) { //successful login
-            //change session params
-            //redirect to home page
-          } else {
-            res.redirect('/login');
-          }
+
+    return models.Users.get({ username })
+      .then(user => {
+        if (!user || !models.Users.compare(password, user.password, user.salt)) {
+          throw new Error('Username and password do not match');
         }
+        return models.Sessions.update({ hash: req.session.hash }, { userId: user.id });
+      })
+      .then(() => {
+        res.redirect('/');
+      })
+      .error(error => {
+        res.status(500).send(error);
+      })
+      .catch(() => {
+        res.redirect('/login'); //triggers redirect loop
+      });
+  });
+
+app.get('/logout',
+  (req, res, next) => {
+    return models.Sessions.delete({hash: req.cookies.shortlyid})
+      .then(() => {
+        res.clearCookie('shortlyid');
+        res.redirect('/login');
+      })
+      .error(error => {
+        res.status(500).send(error);
       });
   });
 
@@ -125,7 +184,7 @@ app.post('/login',
 /************************************************************/
 
 app.get('/:code', (req, res, next) => {
-
+  console.log('I DONT WANNA BE HERE');
   return models.Links.get({ code: req.params.code })
     .tap(link => {
 
